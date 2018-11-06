@@ -27,6 +27,10 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 
 I will create a tidy dataframe from all participants, including the subject ID, arm, and observations over time. The raw data includes 20 files, one for each subject, each with eight weeks of observations arranged in wide format.
 
+I created a function to read-in the spreadsheet files and transform the data in each file from wide to long by week.
+
+I then applied the function to each file name using `map_dfr` from the `purr` package and exracted the arm and subject ID variables from the file name.
+
 ```{r import and tidy}
 
 
@@ -39,11 +43,18 @@ import_file <- function(filename)
      gather(key = week, value = value)
 } 
 
-output = map_dfr(.x = files, import_file, .id = "file_name")
 
-output
+arm_df <- as_tibble(
+  map_dfr(.x = files, import_file, .id = "file_name") %>% 
+  separate(file_name, into = c("remove_1", "remove_2", "temp_1"), sep = "/") %>%
+  mutate(arm_id = str_replace(temp_1, ".csv", ""),
+         week = str_replace(week, "week_", "")) %>% 
+  separate(arm_id, into = c("arm", "subject_id"), sep = "_") %>% 
+  select(c("subject_id", "week", "arm", "value")) 
+)       
+arm_df
 
- 
+  
 ```
 
 
