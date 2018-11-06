@@ -25,36 +25,64 @@ theme_set(theme_bw() + theme(legend.position = "bottom"))
 
 # Problem 1 - Arm longitudinal study 
 
-I will create a tidy dataframe from all participants, including the subject ID, arm, and observations over time. The raw data includes 20 files, one for each subject, each with eight weeks of observations arranged in wide format.
+For this problem, I will create a tidy dataframe from all participants, including the subject ID, arm, and observations over time. The raw data includes 20 files, one for each subject, each with eight weeks of observations arranged in wide format.
 
-I created a function to read-in the spreadsheet files and transform the data in each file from wide to long by week.
+I made a function to read-in the spreadsheet files and transform the data in each file from wide to long by week.
 
 I then applied the function to each file name using `map_dfr` from the `purr` package and exracted the arm and subject ID variables from the file name.
 
-```{r import and tidy}
+```{r import_and_tidy_arm}
 
-
+# create vector of file names to load
 files <- list.files(path = "./data", pattern = "*.csv", full.names = TRUE) %>% 
   set_names()
 
+# create function to import and transform a file
 import_file <- function(filename) 
 { 
   arm_file <- read.csv(file = filename) %>% 
      gather(key = week, value = value)
 } 
 
-
+# map file vector over the import function and tidy tibble
 arm_df <- as_tibble(
   map_dfr(.x = files, import_file, .id = "file_name") %>% 
   separate(file_name, into = c("remove_1", "remove_2", "temp_1"), sep = "/") %>%
   mutate(arm_id = str_replace(temp_1, ".csv", ""),
-         week = str_replace(week, "week_", "")) %>% 
-  separate(arm_id, into = c("arm", "subject_id"), sep = "_") %>% 
-  select(c("subject_id", "week", "arm", "value")) 
+         week = factor(str_replace(week, "week_", ""))) %>% 
+  separate(arm_id, into = c("arm", "subject_id"), sep = "_", remove = FALSE) %>% 
+  select(c("arm_id", "arm", "subject_id", "week",  "value")) %>% 
+  mutate(subject_id = as.integer(subject_id),
+         arm_id = factor(arm_id),
+         arm = factor(arm))  
 )       
 arm_df
 
   
 ```
+
+
+I will make a spaghetti plot showing observations on each subject over time, and to observe differences between groups.
+
+
+```{r arm_spaghetti_plot}
+
+arm_df %>%
+  ggplot(aes(x = week, y = value, group = arm_id, color = arm)) +
+    geom_line() + 
+    labs(
+      title = "Observations over time",
+      x = "week",
+      y = "observation value",
+      caption = "Data from a longitudinal study with control arm and experimental arm"
+    ) + 
+    viridis::scale_color_viridis(
+      name = "Arm", 
+      discrete = TRUE
+    )
+
+```
+
+At the group level, experimental arm observation values were higher than control arm values. The experimental arm values increased over time, while the control arm values did not.
 
 
