@@ -65,7 +65,7 @@ arm_df
 
 ### Plot of observations over time
 
-I will make a spaghetti plot showing observations on each subject over time, and to observe differences between groups.
+I will make a spaghetti plot showing observations on each subject over time to observe differences between groups.
 
 
 ```{r arm_spaghetti_plot}
@@ -107,16 +107,20 @@ homicides <- as.tibble(homicides) %>%
          unresolved = as.numeric(disposition != "Closed by arrest"),
          victim_age = as.numeric(victim_age),
          victim_race = fct_relevel(victim_race, "White")) %>% 
-  select(-c("victim_last", "victim_first", "city", "state"))
+  select(-c("victim_last", "victim_first", "city", "state")) %>% 
+  filter(city_state != "Tulsa, AL")
+
 
 homicides
 
 ```
 
 
-```{r inspect, results = FALSE}
+```{r inspect, results = FALSE, include = FALSE}
 skimr::skim(homicides)
 ```
+
+
 ### Homicide data description
 
 In the raw data, the 50 included cities represent 28 unique states. The dataset contains information on a total of `r nrow(homicides)` homicide cases. The cities with the most homicides are Chicago (5,535), Philadelphia (3,057), Houston (2,942), and Baltimore (2,827). The states with the most cases are California, Texas, Illinois, and Pennsylvania. 
@@ -131,7 +135,8 @@ homicide_table <-
     group_by(city_state) %>%
     summarize(total_homicides = as.numeric(n()),
               unsolved = sum(unresolved),
-              prct_unsolved = mean(unresolved) * 100) 
+              prct_unsolved = mean(unresolved) * 100) %>% 
+    mutate(city_state = factor(city_state))
 
 homicide_table %>% 
   knitr::kable(digits = 1)
@@ -181,8 +186,25 @@ all_city_prop_test %>%
   knitr::kable(digits = 3)
 ```
 
+### Plot of unsolved case proportion estimates
 
+I will create a plot that shows the estimates and confidence intervals for each city, organized according to the proportion of unsolved homicides.
 
+```{r estimates_plot_all_cities}
 
-Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+all_city_prop_test %>%
+    mutate(city_state = fct_reorder(city_state, estimate, .desc = TRUE)) %>% 
+ggplot(aes(x = city_state, y = estimate)) +
+    geom_point() +
+    geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
+    theme(text = element_text(size = 10),
+          axis.text.x = element_text(angle = 80, hjust = 1)) +
+    labs(
+      title = "Unsolved homicide case proportion estimates",
+      x = "City",
+      y = "Proportion estimate",
+      caption = "Data from Washington Post"
+    ) 
+    
+```
 
