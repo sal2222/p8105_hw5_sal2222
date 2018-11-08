@@ -22,7 +22,10 @@ knitr::opts_chunk$set(
 theme_set(theme_bw() + theme(legend.position = "bottom"))
 ```
 
-## Problem 1 - Arm longitudinal study 
+## Problem 1 - Longitudinal arm study 
+
+
+### Data import and cleaning
 
 For this problem, I will create a tidy dataframe from all participants, including the subject ID, arm, and observations over time. The raw data includes 20 files, one for each subject, each with eight weeks of observations arranged in wide format.
 
@@ -60,6 +63,7 @@ arm_df
   
 ```
 
+### Plot of observations over time
 
 I will make a spaghetti plot showing observations on each subject over time, and to observe differences between groups.
 
@@ -82,6 +86,8 @@ arm_df %>%
 
 ```
 
+### Observed group differences
+
 At the group level, experimental arm observation values were higher than control arm values. The experimental arm values increased over time, while the control arm values did not.
 
 
@@ -91,15 +97,17 @@ At the group level, experimental arm observation values were higher than control
 This problem includes data from the Washington Post on homicides in 50 large U.S. cities. 
 
  
-
-
-Describe the raw data. Create a city_state variable (e.g. “Baltimore, MD”) and then summarize within cities to obtain the total number of homicides and the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
-
-```{r}
+```{r import_tidy_homicides}
+# import Washington Post homicide data
 homicides <- read.csv("https://raw.githubusercontent.com/washingtonpost/data-homicides/master/homicide-data.csv")
 
+# tidy Washington Post homicide data
 homicides <- as.tibble(homicides) %>% 
-  mutate(city_state = str_c(city, state, sep = ", ", collapse = NULL))
+  mutate(city_state = str_c(city, state, sep = ", ", collapse = NULL),
+         unresolved = as.numeric(disposition != "Closed by arrest"),
+         victim_age = as.numeric(victim_age),
+         victim_race = fct_relevel(victim_race, "White")) %>% 
+  select(-c("victim_last", "victim_first", "city", "state"))
 
 homicides
 
@@ -109,34 +117,69 @@ homicides
 ```{r inspect, results = FALSE}
 skimr::skim(homicides)
 ```
+### Homicide data description
 
 In the raw data, the 50 included cities represent 28 unique states. The dataset contains information on a total of `r nrow(homicides)` homicide cases. The cities with the most homicides are Chicago (5,535), Philadelphia (3,057), Houston (2,942), and Baltimore (2,827). The states with the most cases are California, Texas, Illinois, and Pennsylvania. 
 
 It contains victim information including name, race, age, and gender, along with the reported date of the homicide, grid coordinates for the location (missing for 60 cases), and case disposition status. The date range spans from January 2007 to November 2015. 
 
+The table below summarizes the  total number of homicides and the number of unsolved homicides by city.
 
-For the city of Baltimore, MD, use the prop.test function to estimate the proportion of homicides that are unsolved; save the output of prop.test as an R object, apply the broom::tidy to this object and pull the estimated proportion and confidence intervals from the resulting tidy dataframe.
+```{r unsolved_by_city}
+homicide_table <-
+  homicides %>% 
+    group_by(city_state) %>%
+    summarize(total_homicides = as.numeric(n()),
+              unsolved = sum(unresolved),
+              prct_unsolved = mean(unresolved) * 100) 
+
+homicide_table %>% 
+  knitr::kable(digits = 1)
+```
+
+
+### Baltimore Test of Equal or Given Proportions
+
+For the city of Baltimore, MD, I will use the prop.test function to estimate the proportion of homicides that are unsolved and the confidence interval.
 
 
 ```{r Baltimore_prop_test}
 
-homicides %>% 
-  filter(city == "Baltimore") %>% 
-  select(disposition) %>% 
-  count(disposition)
+x <- homicide_table %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  pull(unsolved)
 
+n <- homicide_table %>% 
+  filter(city_state == "Baltimore, MD") %>% 
+  pull(total_homicides)
 
+baltimore_test <- prop.test(x, n)
 
-levels(homicides$disposition)
+baltimore_test %>% 
+  broom::tidy() %>% 
+  select(estimate, conf.low, conf.high) %>% 
+  knitr::kable(digits = 3)
+
 ```
 
-prop.test(x, n, p = NULL,
-          alternative = c("two.sided", "less", "greater"),
-          conf.level = 0.95, correct = TRUE)
 
+### All cities Test of Equal or Given Proportions
 
-Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and  unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
+I will now extract the proportion of unsolved homicides and the confidence interval for each city using `purr::map2`.
 
+```{r prop_test_all cities}
+
+all_city_prop_test <-
+  homicide_table %>% 
+    select(city_state, unsolved, total_homicides) %>% 
+    mutate(prop_test = map2(unsolved, total_homicides, prop.test),
+           prop_test = map(prop_test, broom::tidy)) %>% 
+    unnest() %>% 
+    select(city_state, estimate, conf.low, conf.high)
+  
+all_city_prop_test %>% 
+  knitr::kable(digits = 3)
+```
 
 
 
